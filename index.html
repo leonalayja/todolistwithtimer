@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+
+        h1 {
+            color: #00ff00;
+        }
+
+        .form {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+
+        .form input, .form textarea {
+            margin-bottom: 10px;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #333;
+            background: #222;
+            color: #fff;
+            border-radius: 5px;
+        }
+
+        .form .time-inputs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .form .time-inputs input {
+            width: 100%;
+        }
+
+        .form button {
+            padding: 10px;
+            font-size: 16px;
+            color: #000;
+            background: #00ff00;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .tabs button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #222;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+
+        .tabs button.active {
+            background: #00ff00;
+            color: #000;
+        }
+
+        .task-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .task-card {
+            background: #222;
+            padding: 15px;
+            border-radius: 10px;
+            width: calc(50% - 20px);
+            position: relative;
+        }
+
+        .task-card h3 {
+            margin: 0 0 10px;
+            color: #00ff00;
+        }
+
+        .task-card p {
+            margin: 0 0 10px;
+        }
+
+        .task-card .timer {
+            font-size: 14px;
+            color: #ff4444;
+        }
+
+        .task-card .actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+        }
+
+        .task-card button {
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .task-card button:hover {
+            color: #00ff00;
+        }
+
+        @media (max-width: 600px) {
+            .task-card {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>To-Do App</h1>
+
+        <div class="form">
+            <input type="text" id="title" placeholder="Task Title" required>
+            <textarea id="description" placeholder="Task Description" rows="3" required></textarea>
+            <div class="time-inputs">
+                <input type="number" id="hours" placeholder="Hours" min="0" required>
+                <input type="number" id="minutes" placeholder="Minutes" min="0" max="59" required>
+                <input type="number" id="seconds" placeholder="Seconds" min="0" max="59" required>
+            </div>
+            <button id="addTask">Add Task</button>
+        </div>
+
+        <div class="tabs">
+            <button id="todoTab" class="active">Todo</button>
+            <button id="completedTab">Completed</button>
+        </div>
+
+        <div class="task-list" id="taskList"></div>
+    </div>
+
+    <audio id="alarm" src="alarm.mp3" preload="auto" loop></audio>
+
+    <script>
+        const taskList = document.getElementById('taskList');
+        const todoTab = document.getElementById('todoTab');
+        const completedTab = document.getElementById('completedTab');
+        const addTaskButton = document.getElementById('addTask');
+        const alarm = document.getElementById('alarm');
+
+        let tasks = [];
+        let activeTab = 'todo';
+
+        function renderTasks() {
+            taskList.innerHTML = '';
+            const filteredTasks = tasks.filter(task => task.status === activeTab);
+
+            filteredTasks.forEach(task => {
+                const taskCard = document.createElement('div');
+                taskCard.className = 'task-card';
+
+                taskCard.innerHTML = `
+                    <h3>${task.title}</h3>
+                    <p>${task.description}</p>
+                    <div class="timer" id="timer-${task.id}">${formatTime(task.timeLeft)}</div>
+                    <div class="actions">
+                        <button onclick="editTask(${task.id})">✏️</button>
+                        <button onclick="deleteTask(${task.id})">🗑️</button>
+                        ${activeTab === 'todo' ? `<button onclick="completeTask(${task.id})">✔️</button>` : ''}
+                        ${task.timeLeft === 0 && task.status === 'todo' ? `<button onclick="moveToCompleted(${task.id})">Mark as Completed</button>` : ''}
+                    </div>
+                `;
+
+                taskList.appendChild(taskCard);
+            });
+        }
+
+        function formatTime(seconds) {
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        function addTask() {
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const hours = parseInt(document.getElementById('hours').value, 10) || 0;
+            const minutes = parseInt(document.getElementById('minutes').value, 10) || 0;
+            const seconds = parseInt(document.getElementById('seconds').value, 10) || 0;
+            const timer = (hours * 3600) + (minutes * 60) + seconds;
+
+            if (title && description && timer > 0) {
+                const newTask = {
+                    id: Date.now(),
+                    title,
+                    description,
+                    timeLeft: timer,
+                    status: 'todo',
+                };
+                tasks.push(newTask);
+                renderTasks();
+            }
+        }
+
+        function editTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                const newTitle = prompt('Edit Title', task.title);
+                const newDescription = prompt('Edit Description', task.description);
+                const newHours = parseInt(prompt('Edit Hours', Math.floor(task.timeLeft / 3600)), 10);
+                const newMinutes = parseInt(prompt('Edit Minutes', Math.floor((task.timeLeft % 3600) / 60)), 10);
+                const newSeconds = parseInt(prompt('Edit Seconds', task.timeLeft % 60), 10);
+                const newTime = (newHours * 3600) + (newMinutes * 60) + newSeconds;
+
+                if (newTitle) task.title = newTitle;
+                if (newDescription) task.description = newDescription;
+                if (newTime > 0) task.timeLeft = newTime;
+
+                renderTasks();
+            }
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(task => task.id !== id);
+            renderTasks();
+        }
+
+        function completeTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.status = 'completed';
+                renderTasks();
+            }
+        }
+
+        function moveToCompleted(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.status = 'completed';
+                alarm.pause();
+                alarm.currentTime = 0;
+                renderTasks();
+            }
+        }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            todoTab.classList.toggle('active', tab === 'todo');
+            completedTab.classList.toggle('active', tab === 'completed');
+            renderTasks();
+        }
+
+        function countdown() {
+            tasks.forEach(task => {
+                if (task.status === 'todo' && task.timeLeft > 0) {
+                    task.timeLeft -= 1;
+                    if (task.timeLeft === 0) {
+                        if (document.visibilityState !== 'visible') {
+                            Notification.requestPermission().then(permission => {
+                                if (permission === 'granted') {
+                                    new Notification('Task Timer Ended', { body: `The timer for task "${task.title}" has ended!` });
+                                }
+                            });
+                        }
+                        try {
+                            alarm.play();
+                        } catch (error) {
+                            console.error('Alarm play error:', error);
+                        }
+                    }
+                }
+            });
+            renderTasks();
+        }
+
+        addTaskButton.addEventListener('click', addTask);
+        todoTab.addEventListener('click', () => switchTab('todo'));
+        completedTab.addEventListener('click', () => switchTab('completed'));
+        setInterval(countdown, 1000);
+
+        renderTasks();
+    </script>
+</body>
+</html>
